@@ -51,6 +51,23 @@ jobs:
           with open(os.environ['GITHUB_STEP_SUMMARY'], 'a', encoding='utf-8') as f:
               f.write(summary)
           PY
+      - name: Comprobar que existan precios locales verificados
+        shell: bash
+        run: |
+          python - <<'PY'
+          import csv
+          from pathlib import Path
+          path = Path('evidencia/results.csv')
+          if not path.exists():
+              raise SystemExit('ERROR: No se generó el informe de auditoría.')
+          with path.open(encoding='utf-8-sig', newline='') as f:
+              rows = list(csv.DictReader(f))
+          verified = [r for r in rows if r.get('status') == 'VERIFIED'
+                      and r.get('store') and r.get('unit_price_clp')]
+          if not verified:
+              raise SystemExit('PENDIENTE: ninguna consulta tiene precio local y sucursal verificados. Revisar el resumen anterior. No se publicarán precios.')
+          print(f'Precios locales verificados: {len(verified)}')
+          PY
       - name: Publicar diagnóstico y capturas
         if: always()
         uses: actions/upload-artifact@v4
