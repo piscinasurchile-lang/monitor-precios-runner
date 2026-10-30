@@ -21,10 +21,41 @@ jobs:
         run: python -m unittest discover -p 'test_*.py' -v
       - name: Ejecutar auditoría
         run: python scraper.py --out evidencia
+      - name: Resumen visible en GitHub
+        if: always()
+        shell: bash
+        run: |
+          python - <<'PY'
+          import csv
+          from collections import Counter
+          from pathlib import Path
+          path = Path('evidencia/results.csv')
+          lines = ['# Resultado de auditoría por sucursal', '']
+          if not path.exists():
+              lines += ['**Sin resultados:** el extractor no generó results.csv. Revisar los pasos anteriores.']
+          else:
+              with path.open(encoding='utf-8-sig', newline='') as f:
+                  rows = list(csv.DictReader(f))
+              counts = Counter(r.get('status') or 'UNKNOWN' for r in rows)
+              lines += [f'**Consultas:** {len(rows)}', f'**Precios verificados:** {sum(1 for r in rows if r.get("status") == "VERIFIED")}', '']
+              lines += ['## Estados', '', '| Estado | Cantidad |', '|---|---:|']
+              lines += [f'| {state} | {n} |' for state, n in sorted(counts.items())]
+              lines += ['', '## Detalle por sucursal', '', '| Ciudad | Proveedor | Producto | Estado |', '|---|---|---|---|']
+              for r in rows:
+                  fields = [r.get(k, '').replace('|', '/') for k in ('city', 'provider', 'product', 'status')]
+                  lines.append('| ' + ' | '.join(fields) + ' |')
+              lines += ['', '**Advertencia:** REQUIRES_STORE_CONFIRMATION no significa precio verificado. Nunca utilizar como cotización.']
+          summary = '\n'.join(lines) + '\n'
+          print(summary)
+          import os
+          with open(os.environ['GITHUB_STEP_SUMMARY'], 'a', encoding='utf-8') as f:
+              f.write(summary)
+          PY
       - name: Publicar diagnóstico y capturas
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: auditoria-sucursales
           path: evidencia/
+          if-no-files-found: warn
           retention-days: 14
