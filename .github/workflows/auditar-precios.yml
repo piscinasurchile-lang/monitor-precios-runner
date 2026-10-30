@@ -1,0 +1,30 @@
+name: Auditar precios por sucursal
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '0 12 * * 1-5'
+permissions:
+  contents: read
+jobs:
+  auditoria:
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: pip
+      - run: pip install -r requirements.txt
+      - run: python -m playwright install --with-deps chromium
+      - name: Pruebas de validación
+        run: python -m unittest discover -p 'test_*.py' -v
+      - name: Ejecutar auditoría
+        run: python scraper.py --out evidencia
+      - name: Publicar diagnóstico y capturas
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: auditoria-sucursales
+          path: evidencia/
+          retention-days: 14
